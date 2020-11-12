@@ -93,6 +93,7 @@ export interface NfcApi {
   enabled(): Promise<boolean>;
   writeTag(arg: WriteTagOptions, callback: (data: any) => void): Promise<any>;
   eraseTag(callback: (data: any) => void): Promise<any>;
+  lockTag(callback: (data: any) => void): Promise<any>;
   /**
    * Set to null to remove the listener.
    */
@@ -114,6 +115,10 @@ export class Nfc implements NfcApi {
   }
 
   eraseTag(callback: (data: any) => void): Promise<any> {
+    return undefined;
+  }
+
+  lockTag(callback: (data: any) => void): Promise<any> {
     return undefined;
   }
 

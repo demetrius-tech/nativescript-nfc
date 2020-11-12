@@ -341,6 +341,57 @@ export class Nfc implements NfcApi {
     });
   }
 
+  public lockTag(callback: (data: any) => void): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const intent = application.android.foregroundActivity.getIntent() || nfcIntentHandler.savedIntent;
+      if (!intent) {
+        reject("Can't lock tag; didn't receive an intent");
+        return;
+      }
+
+      let tag = intent.getParcelableExtra(android.nfc.NfcAdapter.EXTRA_TAG) as android.nfc.Tag;
+      if (!tag) {
+        reject("No tag found to write to");
+        return;
+      }
+
+      let ndef = android.nfc.tech.Ndef.get(tag);
+      if (ndef === null) {
+        reject("Tag doesn't support NDEF");
+        return;
+      }
+
+      let errorMessage = null;
+      try {
+        ndef.connect();
+
+        if (!ndef.isWritable()) {
+          reject("Tag not writable");
+          return;
+        }
+        if (!ndef.canMakeReadOnly) {
+          reject("Tag can not be made read only");
+          return;
+        }
+
+        console.log("### LOCK TAG ###");
+
+        // TODO: call makeReadOnly
+        errorMessage = null; // ndef.makeReadOnly();
+      } catch (e) {
+        console.log("ndef connection error: " + e);
+        reject("connection failed");
+        return;
+      }
+
+      if (errorMessage === null) {
+        resolve();
+      } else {
+        reject(errorMessage);
+      }
+    });
+  }
+
   public eraseTag(callback: (data: any) => void): Promise<any> {
     return new Promise((resolve, reject) => {
       const intent = application.android.foregroundActivity.getIntent() || nfcIntentHandler.savedIntent;

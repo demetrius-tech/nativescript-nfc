@@ -130,4 +130,14 @@ export class MainComponent extends observable.Observable implements OnInit {
             console.log(err);
         });
     }
+
+    public doLockTag() {
+        this.nfc.lockTag((err) => {
+            this.set("lastNdefDiscovered", "Error " + err);
+        }).then(() => {
+            this.set("lastNdefDiscovered", "Locking Tag");
+        }, (err) => {
+            console.log(err);
+        });
+    }
 }

@@ -4,13 +4,22 @@ export interface NfcSessionInvalidator {
   invalidateSession(): void;
 }
 
+enum NfcOper {
+  READ,
+  WRITE,
+  ERASE,
+  LOCK
+}
+
 export class Nfc implements NfcApi, NfcSessionInvalidator {
+
   private session: NFCReaderSession;
   private delegate: NFCNDEFReaderSessionDelegateImpl;
   private tagDelegate: NFCTagReaderSessionDelegateImpl;
-  public writeMode: boolean = false;
   public shouldUseTagReaderSession: boolean = false;
   public messageToWrite: NFCNDEFMessage;
+
+  public nfcOperation = NfcOper.READ;
 
   private static _available(): boolean {
     const isIOS11OrUp = NSObject.instancesRespondToSelector("accessibilityAttributedLabel");
@@ -55,7 +64,7 @@ export class Nfc implements NfcApi, NfcSessionInvalidator {
         return;
       }
 
-      this.writeMode = false;
+      this.nfcOperation = NfcOper.READ;
       this.shouldUseTagReaderSession = true;
       try {
         this.startScanSession(callback, {});
@@ -80,7 +89,7 @@ export class Nfc implements NfcApi, NfcSessionInvalidator {
         return;
       }
 
-      this.writeMode = false;
+      this.nfcOperation = NfcOper.READ;
       this.shouldUseTagReaderSession = false;
       try {
         this.startScanSession(callback, options);
@@ -110,7 +119,7 @@ export class Nfc implements NfcApi, NfcSessionInvalidator {
 
     return new Promise((resolve, reject) => {
       try {
-        this.writeMode = true;
+        this.nfcOperation = NfcOper.WRITE;
         this.shouldUseTagReaderSession = true;
 
         this.messageToWrite = NfcHelper.jsonToNdefRecords(arg);
@@ -130,7 +139,7 @@ export class Nfc implements NfcApi, NfcSessionInvalidator {
   public eraseTag(callback: (data: any) => void): Promise<any> {
     return new Promise((resolve, reject) => {
       try {
-        this.writeMode = true;
+        this.nfcOperation = NfcOper.ERASE;
         this.shouldUseTagReaderSession = true;
 
         this.messageToWrite = NfcHelper.ndefEmptyMessage();
@@ -138,6 +147,24 @@ export class Nfc implements NfcApi, NfcSessionInvalidator {
         this.startScanSession(callback, {
           stopAfterFirstRead: false,
           scanHint: "Hold near writable NFC tag to erase."
+        });
+
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  lockTag(callback: (data: any) => void): Promise<any> {
+    return new Promise((resolve, reject) => {
+      try {
+        this.nfcOperation = NfcOper.LOCK;
+        this.shouldUseTagReaderSession = true;
+
+        this.startScanSession(callback, {
+          stopAfterFirstRead: false,
+          scanHint: "Hold near writable NFC tag to lock."
         });
 
         resolve();
@@ -398,8 +425,10 @@ class NFCTagReaderSessionDelegateImpl extends NSObject implements NFCTagReaderSe
   tagReaderSessionDidDetectTags(session: NFCTagReaderSession, tags: NSArray<NFCTag> | NFCTag[]): void {
     console.log("tagReaderSessionDidDetectTags");
 
+    console.log("Oper: " + NfcOper[this._owner.get().nfcOperation]);
+
     var tag = tags[0];
-    if (this._owner.get().writeMode) {
+    if (this._owner.get().nfcOperation != NfcOper.READ) {
       session.connectToTagCompletionHandler(tag, (error) => {
         console.log("connectToTagCompletionHandler");
 
@@ -410,7 +439,11 @@ class NFCTagReaderSessionDelegateImpl extends NSObject implements NFCTagReaderSe
           return;
         }
         const ndefTag: NFCNDEFTag = new interop.Reference<NFCNDEFTag>(interop.types.id, tag).value;
-        this.writeNDEFTag(session, ndefTag, this._owner.get().messageToWrite);
+        if (this._owner.get().nfcOperation == NfcOper.LOCK) {
+          this.lockNDEFTag(session, ndefTag);
+        } else {
+          this.writeNDEFTag(session, ndefTag, this._owner.get().messageToWrite);
+        }
       });
     } else {
       var nfcTagData: NfcTagData = {
@@ -425,6 +458,45 @@ class NFCTagReaderSessionDelegateImpl extends NSObject implements NFCTagReaderSe
 
   tagReaderSessionDidInvalidateWithError(session: NFCTagReaderSession, error: NSError): void {
     this._owner.get().invalidateSession();
+  }
+
+  private lockNDEFTag(session: NFCReaderSession, tag: NFCNDEFTag) {
+    NFCNDEFTag.prototype.queryNDEFStatusWithCompletionHandler.call(tag, (status: NFCNDEFStatus, number: number, error: NSError) => {
+      console.log("queryNDEFStatusWithCompletionHandler");
+
+      if (error) {
+        console.log(error);
+        session.invalidateSessionWithErrorMessage("Error getting tag status.");
+        this.resultCallback(error);
+        return;
+      }
+
+      if (status == NFCNDEFStatus.NotSupported) {
+        var errMessage = "Tag is not NDEF compliant.";
+        session.invalidateSessionWithErrorMessage(errMessage);
+        this.resultCallback(errMessage);
+      } else if (status === NFCNDEFStatus.ReadOnly) {
+        var errMessage = "Tag is read only.";
+        session.invalidateSessionWithErrorMessage(errMessage);
+        this.resultCallback(errMessage);
+      } else if (status === NFCNDEFStatus.ReadWrite) {
+
+        console.log("### LOCK TAG ###");
+        /*NFCNDEFTag.prototype.writeLockWithCompletionHandler.call(tag, (error: NSError) => {
+          if (error) {
+            console.log(error);
+            session.invalidateSessionWithErrorMessage("Lock failed.");
+            this.resultCallback(error);
+          } else {
+            session.alertMessage = "NFC tag Lock complete.";
+            session.invalidateSession();
+          }
+        });*/
+
+        session.alertMessage = "NFC tag Lock complete.";
+        session.invalidateSession();
+      }
+    });
   }
 
   private writeNDEFTag(session: NFCReaderSession, tag: NFCNDEFTag, messageToWrite: NFCNDEFMessage) {
@@ -454,7 +526,7 @@ class NFCTagReaderSessionDelegateImpl extends NSObject implements NFCTagReaderSe
               session.invalidateSessionWithErrorMessage("Write failed.");
               this.resultCallback(error);
             } else {
-              if (messageToWrite.records[0].typeNameFormat == NFCTypeNameFormat.Empty) {
+              if (this._owner.get().nfcOperation == NfcOper.ERASE) {
                 session.alertMessage = "Erased data from NFC tag.";
               } else {
                 session.alertMessage = "Wrote data to NFC tag.";
@@ -523,7 +595,7 @@ class NFCNDEFReaderSessionDelegateImpl extends NSObject implements NFCNDEFReader
       setTimeout(() => this._owner.get().invalidateSession());
     }
 
-    if (!this._owner.get().writeMode) {
+    if (this._owner.get().nfcOperation == NfcOper.READ) {
       const firstMessage = messages[0];
       // execute on the main thread with this trick
       this.resultCallback(NfcHelper.ndefToJson(firstMessage));
