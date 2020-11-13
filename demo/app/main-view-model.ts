@@ -119,4 +119,14 @@ export class HelloWorldModel extends observable.Observable {
       console.log(err);
     });
   }
+
+  public doLockTag() {
+    this.nfc.lockTag((err) => {
+      this.set("lastNdefDiscovered", "Error " + err);
+    }).then(() => {
+      this.set("lastNdefDiscovered", "Locking Tag");
+    }, (err) => {
+      console.log(err);
+    });
+  }
 }
