@@ -361,7 +361,6 @@ export class Nfc implements NfcApi {
         return;
       }
 
-      let errorMessage = null;
       try {
         ndef.connect();
 
@@ -374,20 +373,14 @@ export class Nfc implements NfcApi {
           return;
         }
 
-        console.log("### LOCK TAG ###");
-
-        // TODO: call makeReadOnly
-        errorMessage = null; // ndef.makeReadOnly();
+        if (ndef.makeReadOnly()) {
+          resolve();
+        } else {
+          reject("Lock failed");
+        }
       } catch (e) {
         console.log("ndef connection error: " + e);
         reject("connection failed");
-        return;
-      }
-
-      if (errorMessage === null) {
-        resolve();
-      } else {
-        reject(errorMessage);
       }
     });
   }
