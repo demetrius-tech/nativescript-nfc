@@ -480,21 +480,15 @@ class NFCTagReaderSessionDelegateImpl extends NSObject implements NFCTagReaderSe
         session.invalidateSessionWithErrorMessage(errMessage);
         this.resultCallback(errMessage);
       } else if (status === NFCNDEFStatus.ReadWrite) {
-
-        console.log("### LOCK TAG ###");
-        /*NFCNDEFTag.prototype.writeLockWithCompletionHandler.call(tag, (error: NSError) => {
+        NFCNDEFTag.prototype.writeLockWithCompletionHandler.call(tag, (error: NSError) => {
           if (error) {
-            console.log(error);
             session.invalidateSessionWithErrorMessage("Lock failed.");
             this.resultCallback(error);
           } else {
             session.alertMessage = "NFC tag Lock complete.";
             session.invalidateSession();
           }
-        });*/
-
-        session.alertMessage = "NFC tag Lock complete.";
-        session.invalidateSession();
+        });
       }
     });
   }

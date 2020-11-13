@@ -1,6 +1,7 @@
 import { Component, OnInit } from "@angular/core";
 import * as observable from "tns-core-modules/data/observable";
 import { Nfc, NfcNdefData, NfcTagData } from "nativescript-nfc";
+import * as dialogs from "tns-core-modules/ui/dialogs";
 
 @Component({
     selector: "ns-main",
@@ -132,12 +133,23 @@ export class MainComponent extends observable.Observable implements OnInit {
     }
 
     public doLockTag() {
-        this.nfc.lockTag((err) => {
-            this.set("lastNdefDiscovered", "Error " + err);
-        }).then(() => {
-            this.set("lastNdefDiscovered", "Locking Tag");
-        }, (err) => {
-            console.log(err);
+        const alertOptions = {
+            title: "Lock Tag",
+            message: "WARNING: Tag LOCK is irreversible. Continue?",
+            okButtonText: "YES",
+            cancelButtonText: "No"
+        };
+
+        dialogs.confirm(alertOptions).then((result) => {
+            if (!result) return;
+            this.nfc.lockTag((err) => {
+                this.set("lastNdefDiscovered", "Error " + err);
+            }).then(() => {
+                this.set("lastNdefDiscovered", "Locking Tag");
+            }, (err) => {
+                console.log(err);
+            });
+
         });
     }
 }
